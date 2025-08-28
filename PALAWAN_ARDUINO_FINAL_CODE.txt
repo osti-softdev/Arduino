@@ -1,0 +1,190 @@
+#include <Keypad.h>
+#include <LiquidCrystal_I2C.h>
+
+// Keypad setup
+const int ROW_NUM = 4;
+const int COLUMN_NUM = 4;
+
+int scrollPoorIndex = 0;
+
+char keys[ROW_NUM][COLUMN_NUM] = {
+  { '1', '2', '3', 'A' },
+  { '4', '5', '6', 'B' },
+  { '7', '8', '9', 'C' },
+  { '*', '0', '#', 'D' }
+};
+
+byte pin_rows[ROW_NUM] = { 9, 8, 7, 6 };
+byte pin_column[COLUMN_NUM] = { 5, 4, 3, 2 };
+
+Keypad keypad = Keypad(makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_NUM);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// LED pin
+const int LED_REGULAR = A0;
+const int LED_PRIORITY = A1;
+const int LED_SUKI = A2;
+const int LED_THANK_A = 10;
+const int LED_THANK_B = 11;
+const int LED_POOR = 12;
+
+// Text messages
+const char* welcomeText = "PALAWAN PAWNSHOP      ";
+const char* poorText = " We're sorry to hear that...      ";
+int welcomeTextLength = strlen(welcomeText);
+int poorTextLength = strlen(poorText);
+int scrollPosition = 0;
+
+// Variables for non-blocking LED and message timing
+unsigned long ledOnTime = 0;
+unsigned long ledDuration = 0;
+int currentLED = -1;
+bool messageDisplayed = false;
+
+void setup() {
+  lcd.init();
+  lcd.backlight();
+  Serial.begin(9600);
+
+  pinMode(LED_REGULAR, OUTPUT);
+  pinMode(LED_PRIORITY, OUTPUT);
+  pinMode(LED_SUKI, OUTPUT);
+  pinMode(LED_THANK_A, OUTPUT);
+  pinMode(LED_THANK_B, OUTPUT);
+  pinMode(LED_POOR, OUTPUT);
+
+  digitalWrite(LED_REGULAR, LOW);
+  digitalWrite(LED_PRIORITY, LOW);
+  digitalWrite(LED_SUKI, LOW);
+  digitalWrite(LED_THANK_A, LOW);
+  digitalWrite(LED_THANK_B, LOW);
+  digitalWrite(LED_POOR, LOW);
+
+  lcd.setCursor((16 - strlen("Welcome to")) / 2, 0);
+  lcd.print("Welcome to");
+}
+
+void loop() {
+  char key = keypad.getKey();
+
+  if (key && currentLED == -1) {
+    Serial.println(key);
+    lcd.clear();
+
+    int lcdWidth = 16;
+    const char* message = "";
+
+    if (key == '3') {
+      digitalWrite(LED_REGULAR, HIGH);
+      lcd.setCursor((16 - strlen("Please get")) / 2, 0);
+      lcd.print("Please get");
+      lcd.setCursor((16 - strlen("your ticket")) / 2, 1);
+      lcd.print("your ticket");
+
+      currentLED = LED_REGULAR;
+      ledOnTime = millis();
+      ledDuration = 1000;
+      messageDisplayed = true;
+
+    } else if (key == '6') {
+      digitalWrite(LED_PRIORITY, HIGH);
+      lcd.setCursor((16 - strlen("Please get")) / 2, 0);
+      lcd.print("Please get");
+      lcd.setCursor((16 - strlen("your ticket")) / 2, 1);
+      lcd.print("your ticket");
+
+      currentLED = LED_PRIORITY;
+      ledOnTime = millis();
+      ledDuration = 1000;
+      messageDisplayed = true;
+
+    } else if (key == '9') {
+      digitalWrite(LED_SUKI, HIGH);
+      lcd.setCursor((16 - strlen("Please get")) / 2, 0);
+      lcd.print("Please get");
+      lcd.setCursor((16 - strlen("your ticket")) / 2, 1);
+      lcd.print("your ticket");
+
+      currentLED = LED_SUKI;
+      ledOnTime = millis();
+      ledDuration = 1000;
+      messageDisplayed = true;
+    } else if (key == 'A') {
+      digitalWrite(LED_THANK_A, HIGH);
+      message = "Thank You";
+      lcd.setCursor((lcdWidth - strlen(message)) / 2, 0);
+      lcd.print(message);
+
+      currentLED = LED_THANK_A;
+      ledOnTime = millis();
+      ledDuration = 1000;
+      messageDisplayed = true;
+
+    } else if (key == 'B') {
+      digitalWrite(LED_THANK_B, HIGH);
+      message = "Thank You";
+      lcd.setCursor((lcdWidth - strlen(message)) / 2, 0);
+      lcd.print(message);
+
+      currentLED = LED_THANK_B;
+      ledOnTime = millis();
+      ledDuration = 1000;
+      messageDisplayed = true;
+
+    } else if (key == 'C') {
+      digitalWrite(LED_POOR, HIGH);
+      currentLED = LED_POOR;
+      ledOnTime = millis();
+      ledDuration = 1500;
+      messageDisplayed = false;
+      scrollPosition = 0;
+      scrollPoorIndex = 0;
+    } else {
+      lcd.setCursor((16 - strlen("Invalid Key")) / 2, 1);
+      lcd.print("Invalid Key");
+
+      currentLED = -1;
+      ledOnTime = millis();
+      ledDuration = 1000;
+      messageDisplayed = true;
+    }
+  }
+
+  // POOR feedback scrolling message
+  if (currentLED == LED_POOR && !messageDisplayed) {
+    static unsigned long lastScroll = 0;
+
+    if (millis() - lastScroll > 100) {
+      lcd.setCursor(0, 0);
+      for (int j = 0; j < 16; j++) {
+        int charred = (scrollPoorIndex + j) % poorTextLength;
+        lcd.write(poorText[charred]);
+      }
+      scrollPoorIndex = (scrollPoorIndex + 1) % poorTextLength;
+      lastScroll = millis();
+    }
+  }
+
+
+  // Handle LED turn off after duration
+  if (currentLED != -1 && millis() - ledOnTime >= ledDuration) {
+    digitalWrite(currentLED, LOW);
+    currentLED = -1;
+    lcd.clear();
+    lcd.setCursor((16 - strlen("Welcome to")) / 2, 0);
+    lcd.print("Welcome to");
+    messageDisplayed = false;
+  }
+
+  // Welcome scroll on line 1
+  static unsigned long lastWelcomeScroll = 0;
+  if (currentLED == -1 && millis() - lastWelcomeScroll > 300) {
+    lcd.setCursor(0, 1);
+    for (int i = 0; i < 16; i++) {
+      int charIndex = (scrollPosition + i) % welcomeTextLength;
+      lcd.write(welcomeText[charIndex]);
+    }
+    scrollPosition = (scrollPosition + 1) % welcomeTextLength;
+    lastWelcomeScroll = millis();
+  }
+}

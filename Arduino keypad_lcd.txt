@@ -1,0 +1,91 @@
+#include <Keypad.h>
+#include <LiquidCrystal_I2C.h>
+
+const int ROW_NUM = 4;
+const int COLUMN_NUM = 4;
+
+char keys[ROW_NUM][COLUMN_NUM] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+
+byte pin_rows[ROW_NUM] = {9, 8, 7, 6};
+byte pin_column[COLUMN_NUM] = {5, 4, 3, 2};
+
+Keypad keypad = Keypad(makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_NUM);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+const char* welcomeText = "PALAWAN PAWNSHOP      ";
+int textLength = strlen(welcomeText);
+int scrollPosition = 0;
+
+void setup() {
+  lcd.init();
+  lcd.backlight();
+  Serial.begin(9600);
+  
+  lcd.setCursor((16 - strlen("Welcome to")) / 2, 0);
+  lcd.print("Welcome to");
+}
+
+void loop() {
+  char key = keypad.getKey();
+
+  if (key) {
+    Serial.println(key);
+    lcd.clear();
+
+    // Change heading to "Your ticket is"
+    lcd.setCursor((16 - strlen("Your ticket is")) / 2, 0);
+    lcd.print("Your ticket is");
+
+    int lcdWidth = 16;
+    const char* message = "";
+
+    if (key == '1') {
+      message = "REGULAR";
+    } else if (key == '2') {
+      message = "PRIORITY";
+    } else if (key == '3') {
+      message = "PRENDA";
+    } else if (key == '4' || key == '5') {
+      message = "Thank You";
+    } else if (key == '6') {
+      lcd.setCursor(0, 1);
+      lcd.print("We are sorry to");
+      delay(2000);
+      lcd.setCursor((lcdWidth - strlen("hear that.")) / 2, 1);
+      lcd.print("hear that.");
+      delay(2000);
+      // Restore welcome
+      lcd.clear();
+      lcd.setCursor((16 - strlen("Welcome to")) / 2, 0);
+      lcd.print("Welcome to");
+      return;
+    }
+
+    // Display selected ticket message
+    if (strlen(message) > 0) {
+      lcd.setCursor((lcdWidth - strlen(message)) / 2, 1);
+      lcd.print(message);
+      delay(3000);
+    }
+
+    // Restore welcome screen
+    lcd.clear();
+    lcd.setCursor((16 - strlen("Welcome to")) / 2, 0);
+    lcd.print("Welcome to");
+  }
+
+  // Scroll "PALAWAN PAWNSHOP" at the bottom
+  lcd.setCursor(0, 1);
+  for (int i = 0; i < 16; i++) {
+    int charIndex = (scrollPosition + i) % textLength;
+    lcd.write(welcomeText[charIndex]);
+  }
+
+  scrollPosition = (scrollPosition + 1) % textLength;
+  delay(300);
+}
